@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare (strict_types = 1);
 
 /*
  * This file is part of the AppleApnPush package
@@ -20,6 +20,7 @@ use Apple\ApnPush\Protocol\Http\Sender\Exception\HttpSenderException;
 /**
  * Send HTTP request via cURL
  */
+// testt comment to see if package update is working
 class CurlHttpSender implements HttpSenderInterface
 {
     /**
