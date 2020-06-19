@@ -33,7 +33,7 @@ interface ProtocolInterface
      *
      * @throws SendNotificationException
      */
-    public function send(Receiver $receiver, Notification $notification, bool $sandbox): void;
+    public function send(): void;
 
     /**
      * Close the connection

@@ -101,7 +101,7 @@ class HttpProtocol implements ProtocolInterface
      *
      * @throws HttpSenderException
      */
-    public function send(Receiver $receiver, Notification $notification, bool $sandbox): void
+    public function send(): void
     {
         $client = new Client();
         //
