@@ -114,7 +114,10 @@ class HttpProtocol implements ProtocolInterface
                         (string) $response->getBody()
                     );
                     //
-                    throw $this->exceptionFactory->create($appleResponse);
+                    $e = $this->exceptionFactory->create($appleResponse);
+                    error_log(
+                        $e->getMessage()
+                    );
                 }
             },
             'rejected'    => function (RequestException $reason, $index) {
