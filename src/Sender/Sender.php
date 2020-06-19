@@ -44,8 +44,8 @@ class Sender implements SenderInterface
     /**
      * {@inheritdoc}
      */
-    public function send(Receiver $receiver, Notification $notification, bool $sandbox = false): void
+    public function send(): void
     {
-        $this->protocol->send($receiver, $notification, $sandbox);
+        $this->protocol->send();
     }
 }
