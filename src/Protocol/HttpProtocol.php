@@ -106,7 +106,7 @@ class HttpProtocol implements ProtocolInterface
         $client = new Client();
         //
         $pool = new Pool($client, $this->_requestGenerator(), [
-            'concurrency' => 5,
+            'concurrency' => 50,
             'fulfilled'   => function (GuzzleResponse $response, $index) {
                 if ($response->getStatusCode() !== 200) {
                     $appleResponse = new Response(
@@ -116,19 +116,17 @@ class HttpProtocol implements ProtocolInterface
                     //
                     $e = $this->exceptionFactory->create($appleResponse);
                     error_log(
-                        $e->getMessage()
+                        'ex' . $e->getMessage()
                     );
                 }
             },
             'rejected'    => function (RequestException $reason, $index) {
-                error_log($index . ':' . $reason);
+                error_log('rejected' . $index . ':' . $reason->getMessage());
             },
         ]);
-
-        // Initiate the transfers and create a promise
+        //
         $promise = $pool->promise();
-
-        // Force the pool of requests to complete.
+        //
         $promise->wait();
     }
 
@@ -142,40 +140,36 @@ class HttpProtocol implements ProtocolInterface
     //
     private function _requestGenerator()
     {
-        $message      = array_shift($this->messages);
-        $notification = $message['notification'];
-        $receiver     = $message['receiver'];
-        $sandbox      = $message['sandbox'];
-        //
-        $payloadEncoded = $this->payloadEncoder->encode($notification->getPayload());
-        $uri            = $this->uriFactory->create($receiver->getToken(), $sandbox);
-
-        $request = new Request($uri, $payloadEncoded);
-
-        $headers = [
-            'content-type' => 'application/json',
-            'accept'       => 'application/json',
-            'apns-topic'   => $receiver->getTopic(),
-        ];
-
-        $request = $request->withHeaders($headers);
-        $request = $this->authenticator->authenticate($request);
-
-        $request = $this->visitor->visit($notification, $request);
-        //
-        $inlineHeaders = [];
-        //
-        foreach ($request->getHeaders() as $name => $value) {
-            $inlineHeaders[] = \sprintf('%s: %s', $name, $value);
+        foreach ($this->messages as $message) {
+            $notification = $message['notification'];
+            $receiver     = $message['receiver'];
+            $sandbox      = $message['sandbox'];
+            //
+            $payloadEncoded = $this->payloadEncoder->encode($notification->getPayload());
+            $uri            = $this->uriFactory->create($receiver->getToken(), $sandbox);
+            //
+            $request = new Request($uri, $payloadEncoded);
+            //
+            $headers = [
+                'content-type' => 'application/json',
+                'accept'       => 'application/json',
+                'apns-topic'   => $receiver->getTopic(),
+            ];
+            //
+            $request = $request->withHeaders($headers);
+            $request = $this->authenticator->authenticate($request);
+            //
+            $request = $this->visitor->visit($notification, $request);
+            //
+            $guzzleRequest = new GuzzleRequest(
+                'POST',
+                $request->getUrl(),
+                $request->getHeaders(),
+                $request->getContent(),
+                2
+            );
+            //
+            yield $guzzleRequest;
         }
-        $inlineHeaders['body'] = $request->getContent();
-        //
-        $guzzleRequest = new GuzzleRequest(
-            'POST',
-            $request->getUrl(),
-            $inlineHeaders
-        );
-
-        yield $guzzleRequest;
     }
 }
