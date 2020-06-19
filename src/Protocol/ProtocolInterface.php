@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare (strict_types = 1);
 
 /*
  * This file is part of the AppleApnPush package
@@ -22,6 +22,8 @@ use Apple\ApnPush\Model\Receiver;
  */
 interface ProtocolInterface
 {
+    public function addMessage(Receiver $receiver, Notification $notification, bool $sandbox = false): void;
+    //
     /**
      * Send notification to receiver
      *

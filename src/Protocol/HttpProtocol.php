@@ -1,6 +1,6 @@
 <?php
 
-declare(strict_types = 1);
+declare (strict_types = 1);
 
 /*
  * This file is part of the AppleApnPush package
@@ -14,16 +14,21 @@ declare(strict_types = 1);
 namespace Apple\ApnPush\Protocol;
 
 use Apple\ApnPush\Encoder\PayloadEncoderInterface;
-use Apple\ApnPush\Exception\SendNotification\SendNotificationException;
 use Apple\ApnPush\Model\Notification;
 use Apple\ApnPush\Model\Receiver;
 use Apple\ApnPush\Protocol\Http\Authenticator\AuthenticatorInterface;
 use Apple\ApnPush\Protocol\Http\ExceptionFactory\ExceptionFactoryInterface;
 use Apple\ApnPush\Protocol\Http\Request;
+use Apple\ApnPush\Protocol\Http\Response;
 use Apple\ApnPush\Protocol\Http\Sender\Exception\HttpSenderException;
 use Apple\ApnPush\Protocol\Http\Sender\HttpSenderInterface;
 use Apple\ApnPush\Protocol\Http\UriFactory\UriFactoryInterface;
 use Apple\ApnPush\Protocol\Http\Visitor\HttpProtocolVisitorInterface;
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\Pool;
+use GuzzleHttp\Psr7\Request as GuzzleRequest;
+use GuzzleHttp\Psr7\Response as GuzzleResponse;
 
 /**
  * Implement HTTP protocol for send push notification
@@ -70,16 +75,27 @@ class HttpProtocol implements ProtocolInterface
      * @param HttpProtocolVisitorInterface $visitor
      * @param ExceptionFactoryInterface    $exceptionFactory
      */
+    //
+    private $messages;
+    //
     public function __construct(AuthenticatorInterface $authenticator, HttpSenderInterface $httpSender, PayloadEncoderInterface $payloadEncoder, UriFactoryInterface $uriFactory, HttpProtocolVisitorInterface $visitor, ExceptionFactoryInterface $exceptionFactory)
     {
-        $this->authenticator = $authenticator;
-        $this->httpSender = $httpSender;
-        $this->payloadEncoder = $payloadEncoder;
-        $this->uriFactory = $uriFactory;
-        $this->visitor = $visitor;
+        $this->authenticator    = $authenticator;
+        $this->httpSender       = $httpSender;
+        $this->payloadEncoder   = $payloadEncoder;
+        $this->uriFactory       = $uriFactory;
+        $this->visitor          = $visitor;
         $this->exceptionFactory = $exceptionFactory;
     }
 
+    public function addMessage(Receiver $receiver, Notification $notification, bool $sandbox = false): void
+    {
+        $this->messages[] = [
+            'receiver'     => $receiver,
+            'notification' => $notification,
+            'sandbox'      => $sandbox,
+        ];
+    }
     /**
      * {@inheritdoc}
      *
@@ -87,13 +103,30 @@ class HttpProtocol implements ProtocolInterface
      */
     public function send(Receiver $receiver, Notification $notification, bool $sandbox): void
     {
-        try {
-            $this->doSend($receiver, $notification, $sandbox);
-        } catch (HttpSenderException $e) {
-            $this->httpSender->close();
+        $client = new Client();
+        //
+        $pool = new Pool($client, $this->_requestGenerator(), [
+            'concurrency' => 5,
+            'fulfilled'   => function (GuzzleResponse $response, $index) {
+                if ($response->getStatusCode() !== 200) {
+                    $appleResponse = new Response(
+                        $response->getStatusCode(),
+                        (string) $response->getBody()
+                    );
+                    //
+                    throw $this->exceptionFactory->create($appleResponse);
+                }
+            },
+            'rejected'    => function (RequestException $reason, $index) {
+                error_log($index . ':' . $reason);
+            },
+        ]);
 
-            throw $e;
-        }
+        // Initiate the transfers and create a promise
+        $promise = $pool->promise();
+
+        // Force the pool of requests to complete.
+        $promise->wait();
     }
 
     /**
@@ -103,21 +136,16 @@ class HttpProtocol implements ProtocolInterface
     {
         $this->httpSender->close();
     }
-
-    /**
-     * Inner send process
-     *
-     * @param Receiver     $receiver
-     * @param Notification $notification
-     * @param bool         $sandbox
-     *
-     * @throws SendNotificationException
-     * @throws HttpSenderException
-     */
-    private function doSend(Receiver $receiver, Notification $notification, bool $sandbox): void
+    //
+    private function _requestGenerator()
     {
+        $message      = array_shift($this->messages);
+        $notification = $message['notification'];
+        $receiver     = $message['receiver'];
+        $sandbox      = $message['sandbox'];
+        //
         $payloadEncoded = $this->payloadEncoder->encode($notification->getPayload());
-        $uri = $this->uriFactory->create($receiver->getToken(), $sandbox);
+        $uri            = $this->uriFactory->create($receiver->getToken(), $sandbox);
 
         $request = new Request($uri, $payloadEncoded);
 
@@ -131,11 +159,20 @@ class HttpProtocol implements ProtocolInterface
         $request = $this->authenticator->authenticate($request);
 
         $request = $this->visitor->visit($notification, $request);
-
-        $response = $this->httpSender->send($request);
-
-        if ($response->getStatusCode() !== 200) {
-            throw $this->exceptionFactory->create($response);
+        //
+        $inlineHeaders = [];
+        //
+        foreach ($request->getHeaders() as $name => $value) {
+            $inlineHeaders[] = \sprintf('%s: %s', $name, $value);
         }
+        $inlineHeaders['body'] = $request->getContent();
+        //
+        $guzzleRequest = new GuzzleRequest(
+            'POST',
+            $request->getUrl(),
+            $inlineHeaders
+        );
+
+        yield $guzzleRequest;
     }
 }
