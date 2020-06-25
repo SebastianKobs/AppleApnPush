@@ -148,8 +148,6 @@ class HttpProtocol implements ProtocolInterface
                 );
                 //
                 $this->eventDispatcher->dispatch($event, self::MESSAGE_REJECTED_TOPIC);
-                //
-                //error_log('rejected' . $index . ':' . $reason->getMessage());
             },
         ]);
         //
