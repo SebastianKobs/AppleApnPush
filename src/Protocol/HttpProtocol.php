@@ -29,6 +29,8 @@ use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Pool;
 use GuzzleHttp\Psr7\Request as GuzzleRequest;
 use GuzzleHttp\Psr7\Response as GuzzleResponse;
+use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\EventDispatcher\GenericEvent;
 
 /**
  * Implement HTTP protocol for send push notification
@@ -65,6 +67,10 @@ class HttpProtocol implements ProtocolInterface
      */
     private $exceptionFactory;
 
+    //
+    private $eventDispatcher;
+
+    public const MESSAGE_REJECTED_TOPIC = 'apns_msg_rejected';
     /**
      * Constructor.
      *
@@ -86,8 +92,20 @@ class HttpProtocol implements ProtocolInterface
         $this->uriFactory       = $uriFactory;
         $this->visitor          = $visitor;
         $this->exceptionFactory = $exceptionFactory;
+        //
+        $this->eventDispatcher = new EventDispatcher();
     }
-
+    public function addRejectListener($caller, string $callback): void
+    {
+        $this->eventDispatcher->addListener(
+            self::MESSAGE_REJECTED_TOPIC,
+            [
+                $caller,
+                $callback,
+            ]
+        );
+    }
+    //
     public function addMessage(Receiver $receiver, Notification $notification, bool $sandbox = false): void
     {
         $this->messages[] = [
@@ -121,7 +139,17 @@ class HttpProtocol implements ProtocolInterface
                 }
             },
             'rejected'    => function (RequestException $reason, $index) {
-                error_log('rejected' . $index . ':' . $reason->getMessage());
+                $event = new GenericEvent(
+                    self::MESSAGE_REJECTED_TOPIC,
+                    [
+                        'response' => $reason->getResponse(),
+                        'message'  => $this->messages[$index],
+                    ]
+                );
+                //
+                $this->eventDispatcher->dispatch($event, self::MESSAGE_REJECTED_TOPIC);
+                //
+                //error_log('rejected' . $index . ':' . $reason->getMessage());
             },
         ]);
         //

@@ -21,6 +21,8 @@ use Apple\ApnPush\Model\Receiver;
  */
 interface SenderInterface
 {
+    public function addRejectListener($caller, string $callback): void;
+    //
     public function addMessage(Receiver $receiver, Notification $notification, bool $sandbox = false): void;
 
     /**

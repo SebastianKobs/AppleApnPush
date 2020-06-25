@@ -14,13 +14,18 @@
         {
             "name": "Vitaliy Zhuk",
             "email": "zhuk2205@gmail.com"
+        },
+        {
+            "name": "Sebastian Kobs",
+            "email": "kobs@ewerk.de"
         }
     ],
     "require": {
         "php": "^7.1",
         "ext-curl": "*",
         "ext-json": "*",
-        "guzzlehttp/guzzle": "~6.0"
+        "guzzlehttp/guzzle": "~6.0",
+        "symfony/event-dispatcher": "^5.1"
     },
     "require-dev": {
         "phpunit/phpunit": "^8.0",

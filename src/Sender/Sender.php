@@ -36,10 +36,14 @@ class Sender implements SenderInterface
     {
         $this->protocol = $protocol;
     }
-
+    //
     public function addMessage(Receiver $receiver, Notification $notification, bool $sandbox = false): void
     {
         $this->protocol->addMessage($receiver, $notification, $sandbox);
+    }
+    public function addRejectListener($caller, string $callback): void
+    {
+        $this->protocol->addRejectListener($caller, $callback);
     }
     /**
      * {@inheritdoc}
@@ -48,4 +52,5 @@ class Sender implements SenderInterface
     {
         $this->protocol->send();
     }
+
 }
