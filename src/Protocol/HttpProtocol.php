@@ -37,6 +37,7 @@ use Symfony\Component\EventDispatcher\GenericEvent;
  */
 class HttpProtocol implements ProtocolInterface
 {
+    public $debug = false;
     /**
      * @var AuthenticatorInterface
      */
@@ -126,6 +127,9 @@ class HttpProtocol implements ProtocolInterface
         $pool = new Pool($client, $this->_requestGenerator(), [
             'concurrency' => 50,
             'fulfilled'   => function (GuzzleResponse $response, $index) {
+                if ($this->debug) {
+                    error_log('message ' . $index . ' sent!');
+                }
                 if ($response->getStatusCode() !== 200) {
                     $appleResponse = new Response(
                         $response->getStatusCode(),
@@ -147,6 +151,9 @@ class HttpProtocol implements ProtocolInterface
                     ]
                 );
                 //
+                if ($this->debug) {
+                    error_log('message ' . $index . ' rejected!');
+                }
                 $this->eventDispatcher->dispatch(self::MESSAGE_REJECTED_TOPIC, $event);
             },
         ]);
